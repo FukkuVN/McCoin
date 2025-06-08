@@ -1,0 +1,4 @@
+money:
+  # uuid: số tiền
+dailyClaimTime:
+  # uuid: thời gian epoch millis của lần nhận thưởng cuối

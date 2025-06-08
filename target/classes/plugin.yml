@@ -1,13 +1,12 @@
-name: FukkuCoin
+name: FukkuCoinPlugin
 main: fukkucoin.FukkuCoinPlugin
 version: 1.0
-api-version: 1.13
+api-version: 1.21
 commands:
   fukkucoin:
-    description: FukkuCoin main command
-    usage: /fukkucoin <subcommand>
-    aliases: [fcoin]
+    description: Lệnh quản lý FukkuCoin
+    usage: /<command> [args]
 permissions:
   fukkucoin.admin:
-    description: Admin permission for FukkuCoin commands
+    description: Quyền sử dụng lệnh quản trị FukkuCoin
     default: op

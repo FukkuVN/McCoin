@@ -1,0 +1,2 @@
+# McCoin
+FukkuPluginMinecraft

@@ -1,0 +1,12 @@
+name: FukkuCoin
+main: fukkucoin.FukkuCoinPlugin
+version: 1.0
+api-version: 1.16
+depend: [Citizens]
+commands:
+  fukkudaily:
+    description: Nhận coin điểm danh hàng ngày
+    usage: /fukkudaily
+  fukkubuy:
+    description: Mua vật phẩm với FukkuCoin
+    usage: /fukkubuy <item>

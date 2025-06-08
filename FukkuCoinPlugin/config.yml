@@ -1,0 +1,9 @@
+npcs:
+  npc1:
+    name: FukkuShop
+    world: world
+    x: 100.5
+    y: 65
+    z: 100.5
+    yaw: 0
+    pitch: 0

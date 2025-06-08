@@ -1,1 +1,9 @@
-daily-reward: 100
+npcShops:
+  ShopNPC:
+    items:
+      - material: DIAMOND
+        price: 100
+        slot: 0
+      - material: IRON_SWORD
+        price: 50
+        slot: 1

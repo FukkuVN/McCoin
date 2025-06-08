@@ -1,11 +1,23 @@
-ExampleShop:
-  location:
+# Định nghĩa NPC shop: tên NPC, vị trí, các món bán
+shops:
+  npc1:
     world: world
     x: 100.5
-    y: 65.0
+    y: 65
     z: 100.5
-    pitch: 0.0
-    yaw: 0.0
-  items:
-    - DIAMOND:100
-    - APPLE:5
+    items:
+      - material: DIAMOND
+        amount: 1
+        price: 10
+      - material: IRON_INGOT
+        amount: 5
+        price: 5
+  npc2:
+    world: world
+    x: 105.5
+    y: 65
+    z: 101.5
+    items:
+      - material: GOLD_INGOT
+        amount: 3
+        price: 15

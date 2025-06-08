@@ -1,179 +1,199 @@
 package fukkucoin;
 
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
-public class FukkuCoinPlugin extends JavaPlugin {
+public class FukkuCoinPlugin extends JavaPlugin implements Listener {
 
-    private CoinManager coinManager;
-    private DailyRewardManager dailyRewardManager;
-    private NPCShopManager npcShopManager;
+    private File npcShopFile;
+    private FileConfiguration npcShopConfig;
+
+    private File balanceFile;
+    private FileConfiguration balanceConfig;
 
     @Override
     public void onEnable() {
+        // Load NPC shop config
+        npcShopFile = new File(getDataFolder(), "npcshops.yml");
+        if (!npcShopFile.exists()) {
+            saveResource("npcshops.yml", false);
+        }
+        npcShopConfig = YamlConfiguration.loadConfiguration(npcShopFile);
+
+        // Load balance config
+        balanceFile = new File(getDataFolder(), "balance.yml");
+        if (!balanceFile.exists()) {
+            try {
+                balanceFile.createNewFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        balanceConfig = YamlConfiguration.loadConfiguration(balanceFile);
+
+        // Save default config (currency name)
         saveDefaultConfig();
-        saveResource("npcshops.yml", false);
 
-        coinManager = new CoinManager();
-        dailyRewardManager = new DailyRewardManager();
-        npcShopManager = new NPCShopManager();
+        getServer().getPluginManager().registerEvents(this, this);
 
-        getCommand("fcbalance").setExecutor((sender, cmd, label, args) -> {
-            if (!(sender instanceof Player)) return true;
-            Player player = (Player) sender;
-            int balance = coinManager.getBalance(player.getUniqueId());
-            player.sendMessage("§aSố dư FukkuCoin của bạn: §e" + balance + " FC");
-            return true;
-        });
-
-        getCommand("fcclaim").setExecutor((sender, cmd, label, args) -> {
-            if (!(sender instanceof Player)) return true;
-            Player player = (Player) sender;
-            if (dailyRewardManager.canClaim(player.getUniqueId())) {
-                int reward = getConfig().getInt("daily-reward");
-                coinManager.addCoins(player.getUniqueId(), reward);
-                dailyRewardManager.markClaimed(player.getUniqueId());
-                player.sendMessage("§aBạn đã nhận §e" + reward + " FC §atừ phần thưởng hằng ngày!");
-            } else {
-                player.sendMessage("§cBạn đã nhận hôm nay rồi. Hãy quay lại ngày mai!");
-            }
-            return true;
-        });
-
-        getCommand("fcnpc").setExecutor((sender, cmd, label, args) -> {
-            if (!(sender instanceof Player)) return true;
-            Player player = (Player) sender;
-            if (!player.hasPermission("fukkucoin.admin")) return true;
-
-            if (args.length >= 2 && args[0].equalsIgnoreCase("create")) {
-                String npcName = args[1];
-                npcShopManager.openShop(player, npcName);
-                player.sendMessage("§aMở shop cho NPC tên §e" + npcName);
-            } else {
-                player.sendMessage("§cUsage: /fcnpc create <npcName>");
-            }
-            return true;
-        });
+        getLogger().info("FukkuCoinPlugin enabled!");
     }
 
-    // CoinManager (inner class)
-    public class CoinManager {
-        private final ConcurrentHashMap<UUID, Integer> balances = new ConcurrentHashMap<>();
+    @Override
+    public void onDisable() {
+        saveBalances();
+        getLogger().info("FukkuCoinPlugin disabled!");
+    }
 
-        public int getBalance(UUID uuid) {
-            return balances.getOrDefault(uuid, 0);
-        }
-
-        public void addCoins(UUID uuid, int amount) {
-            balances.put(uuid, getBalance(uuid) + amount);
-        }
-
-        public boolean deductCoins(UUID uuid, int amount) {
-            int current = getBalance(uuid);
-            if (current >= amount) {
-                balances.put(uuid, current - amount);
-                return true;
-            }
-            return false;
+    private void saveBalances() {
+        try {
+            balanceConfig.save(balanceFile);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
-    // DailyRewardManager (inner class)
-    public class DailyRewardManager {
-        private final HashMap<UUID, Long> lastClaimTime = new HashMap<>();
+    // Lấy số dư McCoin của người chơi
+    public int getBalance(UUID uuid) {
+        return balanceConfig.getInt(uuid.toString(), 0);
+    }
 
-        public boolean canClaim(UUID uuid) {
-            long now = System.currentTimeMillis();
-            return !lastClaimTime.containsKey(uuid) || now - lastClaimTime.get(uuid) >= 86400000;
+    // Cộng tiền cho người chơi
+    public void addBalance(UUID uuid, int amount) {
+        int current = getBalance(uuid);
+        balanceConfig.set(uuid.toString(), current + amount);
+        saveBalances();
+    }
+
+    // Trừ tiền người chơi, trả về true nếu đủ tiền và trừ thành công
+    public boolean subtractBalance(UUID uuid, int amount) {
+        int current = getBalance(uuid);
+        if (current < amount) return false;
+        balanceConfig.set(uuid.toString(), current - amount);
+        saveBalances();
+        return true;
+    }
+
+    // Mở shop GUI cho người chơi với NPC name
+    private void openShopGUI(Player player, String npcName) {
+        if (!npcShopConfig.contains("shops." + npcName + ".items")) {
+            player.sendMessage(ChatColor.RED + "NPC này không có shop.");
+            return;
         }
+        List<Map<?, ?>> items = npcShopConfig.getMapList("shops." + npcName + ".items");
 
-        public void markClaimed(UUID uuid) {
-            lastClaimTime.put(uuid, System.currentTimeMillis());
+        Inventory inv = Bukkit.createInventory(null, 27, "Shop của " + npcName);
+
+        // Hiển thị số dư McCoin người chơi slot 0
+        int balance = getBalance(player.getUniqueId());
+        ItemStack balanceItem = new ItemStack(Material.PAPER);
+        ItemMeta balanceMeta = balanceItem.getItemMeta();
+        balanceMeta.setDisplayName(ChatColor.GOLD + "Số dư McCoin của bạn: " + ChatColor.GREEN + balance);
+        balanceItem.setItemMeta(balanceMeta);
+        inv.setItem(0, balanceItem);
+
+        // Bắt đầu từ slot 1 cho items shop
+        for (int i = 0; i < items.size(); i++) {
+            Map<?, ?> itemData = items.get(i);
+            String matStr = (String) itemData.get("material");
+            Material mat = Material.getMaterial(matStr);
+            if (mat == null) continue;
+
+            int amount = (int) itemData.get("amount");
+            int price = (int) itemData.get("price");
+
+            ItemStack item = new ItemStack(mat, amount);
+            ItemMeta meta = item.getItemMeta();
+            meta.setDisplayName(ChatColor.WHITE + mat.name());
+            List<String> lore = new ArrayList<>();
+            lore.add(ChatColor.GRAY + "Giá: " + ChatColor.YELLOW + price + " " + getConfig().getString("currency"));
+            meta.setLore(lore);
+            item.setItemMeta(meta);
+
+            inv.setItem(i + 1, item);
+        }
+        player.openInventory(inv);
+    }
+
+    // Xử lý click NPC để mở shop (cần đặt tên NPC đúng với config)
+    @EventHandler
+    public void onNPCClick(PlayerInteractAtEntityEvent event) {
+        Player player = event.getPlayer();
+        if (event.getRightClicked() != null && event.getRightClicked().getCustomName() != null) {
+            String npcName = event.getRightClicked().getCustomName();
+            if (npcShopConfig.contains("shops." + npcName)) {
+                openShopGUI(player, npcName);
+                event.setCancelled(true);
+            }
         }
     }
 
-    // NPCShopManager (inner class)
-    public class NPCShopManager {
-        private final YamlConfiguration shopConfig;
+    // Xử lý click trong inventory shop
+    @EventHandler
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (event.getView().getTitle().startsWith("Shop của ")) {
+            event.setCancelled(true);
 
-        public NPCShopManager() {
-            File file = new File(getDataFolder(), "npcshops.yml");
-            this.shopConfig = YamlConfiguration.loadConfiguration(file);
-        }
+            Player player = (Player) event.getWhoClicked();
 
-        public void openShop(Player player, String npcName) {
-            if (!shopConfig.contains("shops." + npcName)) {
-                player.sendMessage("§cKhông tìm thấy shop cho NPC tên §e" + npcName);
+            // Không cho click slot 0 (hiển thị số dư)
+            if (event.getRawSlot() == 0) return;
+
+            ItemStack clicked = event.getCurrentItem();
+            if (clicked == null || clicked.getType() == Material.AIR) return;
+
+            ItemMeta meta = clicked.getItemMeta();
+            if (meta == null) return;
+
+            List<String> lore = meta.getLore();
+            if (lore == null || lore.isEmpty()) return;
+
+            String priceLine = lore.get(0);
+            int price = extractPrice(priceLine);
+            if (price < 0) {
+                player.sendMessage(ChatColor.RED + "Lỗi giá bán!");
                 return;
             }
-            List<?> items = shopConfig.getList("shops." + npcName);
-            ShopGUI.openShop(player, items);
+
+            if (!subtractBalance(player.getUniqueId(), price)) {
+                player.sendMessage(ChatColor.RED + "Bạn không đủ " + getConfig().getString("currency") + " để mua món này!");
+                return;
+            }
+
+            player.getInventory().addItem(new ItemStack(clicked.getType(), clicked.getAmount()));
+            player.sendMessage(ChatColor.GREEN + "Bạn đã mua " + clicked.getAmount() + " " + clicked.getType().name() + " với giá " + price + " " + getConfig().getString("currency") + ".");
+            player.closeInventory();
         }
     }
 
-    // ShopGUI (static inner class)
-    public static class ShopGUI {
-        public static void openShop(FukkuCoinPlugin plugin, Player player, List<?> items) {
-            Inventory inv = Bukkit.createInventory(null, 27, "§6Shop FukkuCoin");
-
-            for (Object obj : items) {
-                if (obj instanceof Map) {
-                    Map<String, Object> itemData = (Map<String, Object>) obj;
-                    Material material = Material.valueOf((String) itemData.get("material"));
-                    int amount = (int) itemData.get("amount");
-                    int price = (int) itemData.get("price");
-
-                    ItemStack itemStack = new ItemStack(material, amount);
-                    ItemMeta meta = itemStack.getItemMeta();
-                    meta.setDisplayName("§a" + material.name());
-                    meta.setLore(List.of("§eGiá: " + price + " FC", "§7Click để mua"));
-                    itemStack.setItemMeta(meta);
-
-                    inv.addItem(itemStack);
+    // Hàm trích giá từ lore dạng "Giá: 100 McCoin"
+    private int extractPrice(String loreLine) {
+        try {
+            String[] parts = loreLine.split(" ");
+            for (String part : parts) {
+                if (part.matches("\\d+")) {
+                    return Integer.parseInt(part);
                 }
             }
-
-            player.openInventory(inv);
-
-            Bukkit.getPluginManager().registerEvents(new org.bukkit.event.Listener() {
-                @org.bukkit.event.EventHandler
-                public void onClick(InventoryClickEvent e) {
-                    if (!e.getInventory().equals(inv)) return;
-                    if (e.getCurrentItem() == null) return;
-                    if (!(e.getWhoClicked() instanceof Player)) return;
-
-                    Player p = (Player) e.getWhoClicked();
-                    e.setCancelled(true);
-
-                    ItemStack clicked = e.getCurrentItem();
-                    List<String> lore = clicked.getItemMeta().getLore();
-                    if (lore == null || lore.isEmpty()) return;
-
-                    String priceLine = lore.get(0).replace("§eGiá: ", "").replace(" FC", "");
-                    int price = Integer.parseInt(priceLine);
-
-                    FukkuCoinPlugin pluginInstance = (FukkuCoinPlugin) Bukkit.getPluginManager().getPlugin("FukkuCoin");
-                    if (pluginInstance.coinManager.deductCoins(p.getUniqueId(), price)) {
-                        p.getInventory().addItem(new ItemStack(clicked.getType(), clicked.getAmount()));
-                        p.sendMessage("§aMua thành công §e" + clicked.getAmount() + " " + clicked.getType() + " §avới giá §e" + price + " FC");
-                    } else {
-                        p.sendMessage("§cBạn không đủ FukkuCoin!");
-                    }
-                }
-            }, plugin);
+        } catch (Exception e) {
+            return -1;
         }
+        return -1;
     }
 }

@@ -1,0 +1,20 @@
+name: FukkuCoin
+main: fukkucoin.FukkuCoinPlugin
+version: 1.0
+api-version: 1.16
+commands:
+  fcbalance:
+    description: Xem số dư FukkuCoin của bạn
+    usage: /fcbalance
+    permission: fukkucoin.use
+  fcnpc:
+    description: Quản lý NPC shop (OP mới dùng được)
+    usage: /fcnpc <create|reload>
+    permission: fukkucoin.admin
+permissions:
+  fukkucoin.use:
+    description: Cho phép dùng FukkuCoin
+    default: true
+  fukkucoin.admin:
+    description: Cho phép dùng lệnh quản lý NPC shop
+    default: op
